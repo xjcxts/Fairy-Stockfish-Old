@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: make
-        run: cd src && make clean && make -j build COMP=gcc ARCH=${{ matrix.arch }} EXE=${{ matrix.arch }} largeboards=yes && strip fairy-stockfish-largeboards_${{ matrix.arch }}
+        run: cd src && make clean && make -j build COMP=gcc ARCH=${{ matrix.arch }} EXE=${{ matrix.arch }} largeboards=yes && strip ${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v3
         with:
