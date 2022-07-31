@@ -98,7 +98,7 @@ namespace {
 
   // History and stats update bonus, based on depth
   int stat_bonus(Depth d) {
-    return std::min((9 * d + 270) * d - 311 , 2145);
+    return std::min((8 * d + 240) * d - 276 , 1907);
   }
 
   // Add a small random component to draw evaluations to avoid 3-fold blindness
@@ -494,19 +494,22 @@ void Thread::search() {
           double complexPosition = complexity < cMid ? complexity * loSlope + dLow
                                                      : std::min(1.0 + (complexity - cMid) * hiSlope, dMax);
 
-          int bv = (int)(bestValue);
-          bv = bv == 0 ? bv + 1: bv; // Avoid undefined log
-          // Inputs of the neural network
-          int ft[9]={(int)(10*std::sin(bv)), (int)(10*std::cos(bv)), (int)(std::log(abs(bv))),
-                     (int)(std::log10(abs(bv))), (int)(std::cbrt(bv)), (int)(std::log2(abs(bv))),
-                     (int)(std::sqrt(abs(bv))), (int)(std::log(abs(bv)) / 0.47), (int)(std::log(abs(bv)) / 1.18)};
+          double nn = 1.0;
+          if (bestValue >= 0) {
+              int bv = (int)(bestValue);
+              bv = bv == 0 ? bv + 1: bv; // Avoid undefined log
+              // Inputs of the neural network
+              int ft[9]={(int)(10*std::sin(bv)), (int)(10*std::cos(bv)), (int)(std::log(abs(bv))),
+                         (int)(std::log10(abs(bv))), (int)(std::cbrt(bv)), (int)(std::log2(abs(bv))),
+                         (int)(std::sqrt(abs(bv))), (int)(std::log(abs(bv)) / 0.47), (int)(std::log(abs(bv)) / 1.18)};
 
-          // Matrix multiplication
-          int neuron[5] = {0};
-          for (size_t i = 0; i < 5; ++i){
-              neuron[i]= std::max(0, std::inner_product(ft, ft+9, nw[i], 0) + nb[i]); // ReLU activation function
+              // Matrix multiplication
+              int neuron[5] = {0};
+              for (size_t i = 0; i < 5; ++i){
+                  neuron[i]= std::max(0, std::inner_product(ft, ft+9, nw[i], 0) + nb[i]); // ReLU activation function
+              }
+              nn =  std::clamp(std::inner_product(neuron, neuron+5, nwo, 0)/400.0 + nbo, 0.1, 2.5);
           }
-          double nn =  std::clamp(std::inner_product(neuron, neuron+5, nwo, 0)/400.0 + nbo, 0.1, 2.5);
           double totalTime = Time.optimum() * fallingEval * reduction * bestMoveInstability * complexPosition * nn;
 
           // Cap used time in case of a single legal move for a better viewer experience in tournaments
@@ -668,7 +671,7 @@ namespace {
     // At non-PV nodes we check for an early TT cutoff
     if (  !PvNode
         && ss->ttHit
-        && tte->depth() > depth - ((int)thisThread->id() & 0x1)
+        && tte->depth() > depth - ((int)thisThread->id() & 0x1)- (tte->bound() == BOUND_EXACT)
         && ttValue != VALUE_NONE // Possible in case of TT access race
         && (ttValue >= beta ? (tte->bound() & BOUND_LOWER)
                             : (tte->bound() & BOUND_UPPER)))
@@ -938,7 +941,7 @@ namespace {
     // Use qsearch if depth is equal or below zero (~4 Elo)
     if (    PvNode
         && !ttMove)
-        depth -= 3;
+        depth -= 4;
 
     if (depth <= 0)
         return qsearch<PV>(pos, ss, alpha, beta);
@@ -1577,10 +1580,9 @@ moves_loop: // When in check, search starts from here
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
           && !givesCheck
           &&  to_sq(move) != prevSq
-          &&  futilityBase > -VALUE_KNOWN_WIN
-          &&  type_of(move) != PROMOTION)
+          &&  futilityBase > -VALUE_KNOWN_WIN)
       {
-
+          mc++; 
           if (moveCount > 3 || mc > 2)
               continue;
 
