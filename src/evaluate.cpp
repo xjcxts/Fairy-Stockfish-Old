@@ -280,8 +280,6 @@ namespace {
     S(0, 0), S(3, 44), S(37, 68), S(42, 60), S(0, 39), S(58, 43)
   };
 
-  constexpr Value CorneredBishop = Value(50);
-
   // Assorted bonuses and penalties
   constexpr Score UncontestedOutpost  = S(  1, 10);
   constexpr Score BishopOnKingRing    = S( 24,  0);
@@ -561,18 +559,6 @@ namespace {
                 // Bonus for bishop on a long diagonal which can "see" both center squares
                 if (more_than_one(attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & Center))
                     score += LongDiagonalBishop;
-
-                // An important Chess960 pattern: a cornered bishop blocked by a friendly
-                // pawn diagonally in front of it is a very serious problem, especially
-                // when that pawn is also blocked.
-                if (   pos.is_chess960()
-                    && (s == relative_square(Us, SQ_A1) || s == relative_square(Us, SQ_H1)))
-                {
-                    Direction d = pawn_push(Us) + (file_of(s) == FILE_A ? EAST : WEST);
-                    if (pos.piece_on(s + d) == make_piece(Us, PAWN))
-                        score -= !pos.empty(s + d + pawn_push(Us)) ? 4 * make_score(CorneredBishop, CorneredBishop)
-                                                                   : 3 * make_score(CorneredBishop, CorneredBishop);
-                }
             }
         }
 
@@ -598,7 +584,7 @@ namespace {
                 {
                     File kf = file_of(pos.square<KING>(Us));
                     if ((kf < FILE_E) == (file_of(s) < kf))
-                        score -= TrappedRook * (1 + !pos.castling_rights(Us));
+                        score -= TrappedRook * 2;
                 }
             }
         }
@@ -685,7 +671,6 @@ namespace {
 
     // Analyse the safe enemy's checks which are possible on next move
     safe  = ~pos.pieces(Them);
-    if (!pos.check_counting() || pos.checks_remaining(Them) > 1)
     safe &= ~attackedBy[Us][ALL_PIECES] | (weak & attackedBy2[Them]);
 
     b1 = attacks_bb<ROOK  >(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
@@ -730,17 +715,6 @@ namespace {
                     unsafeChecks |= pawnChecks;
             }
             break;
-        case SHOGI_PAWN:
-            if (pos.promoted_piece_type(pt))
-            {
-                otherChecks = attacks_bb(Us, pos.promoted_piece_type(pt), ksq, pos.pieces()) & attackedBy[Them][pt]
-                                 & zone_bb(Them, pos.promotion_rank(), pos.max_rank()) & pos.board_bb();
-                if (otherChecks & safe)
-                    kingDanger += SafeCheck[FAIRY_PIECES][more_than_one(otherChecks & safe)];
-                else
-                    unsafeChecks |= otherChecks;
-            }
-            break;
         case KING:
             break;
         default:
@@ -751,22 +725,6 @@ namespace {
                 unsafeChecks |= otherChecks;
         }
     }
-
-    // Virtual piece drops
-    if (pos.two_boards() && pos.piece_drops())
-    {
-        for (PieceType pt : pos.piece_types())
-            if (pos.count_in_hand(Them, pt) <= 0 && (attacks_bb(Us, pt, ksq, pos.pieces()) & safe & pos.drop_region(Them, pt) & ~pos.pieces()))
-            {
-                kingDanger += VirtualCheck * 500 / (500 + PieceValue[MG][pt]);
-                // Presumably a mate threat
-                if (!(attackedBy[Us][KING] & ~(attackedBy[Them][ALL_PIECES] | pos.pieces(Us))))
-                    kingDanger += 2000;
-            }
-    }
-
-    if (pos.check_counting())
-        kingDanger += kingDanger * 7 / (3 + pos.checks_remaining(Them));
 
     Square s = file_of(ksq) == FILE_A ? ksq + EAST : file_of(ksq) == pos.max_file() ? ksq + WEST : ksq;
     Bitboard kingFlank = pos.max_file() == FILE_H ? KingFlank[file_of(ksq)] : file_bb(s) | adjacent_files_bb(s);
@@ -783,14 +741,14 @@ namespace {
     kingDanger +=        kingAttackersCount[Them] * kingAttackersWeight[Them]
                  +       kingAttackersCountInHand[Them] * kingAttackersWeight[Them]
                  +       kingAttackersCount[Them] * kingAttackersWeightInHand[Them]
-                 + 183 * popcount(kingRing[Us] & (weak | ~pos.board_bb(Us, KING))) * (1 + pos.captures_to_hand() + pos.check_counting())
-                 + 148 * popcount(unsafeChecks) * (1 + pos.check_counting())
+                 + 183 * popcount(kingRing[Us] & (weak | ~pos.board_bb(Us, KING))) * (1 + pos.captures_to_hand())
+                 + 148 * popcount(unsafeChecks) * 1
                  +  98 * popcount(pos.blockers_for_king(Us))
-                 +  69 * kingAttacksCount[Them] * (2 + 8 * pos.check_counting() + pos.captures_to_hand()) / 2
+                 +  69 * kingAttacksCount[Them] * (2 + pos.captures_to_hand()) / 2
                  +   3 * kingFlankAttack * kingFlankAttack / 8
                  +       mg_value(mobility[Them] - mobility[Us]) * int(!pos.captures_to_hand())
                  - 873 * !(pos.major_pieces(Them) || pos.captures_to_hand())
-                       * 2 / (2 + 2 * pos.check_counting() + 2 * pos.two_boards() + 2 * pos.makpong()
+                       * 2 / (2 + 2 * pos.two_boards() + 2 * pos.makpong()
                                 + (pos.king_type() != KING) * (pos.diagonal_lines() ? 1 : 2))
                  - 100 * bool(attackedBy[Us][KNIGHT] & attackedBy[Us][KING])
                  -   6 * mg_value(score) / 8
@@ -806,10 +764,7 @@ namespace {
         score -= PawnlessFlank;
 
     // Penalty if king flank is under attack, potentially moving toward the king
-    score -= FlankAttacks * kingFlankAttack * (1 + 5 * pos.captures_to_hand() + pos.check_counting());
-
-    if (pos.check_counting())
-        score += make_score(0, mg_value(score) * 2 / (2 + pos.checks_remaining(Them)));
+    score -= FlankAttacks * kingFlankAttack * (1 + 5 * pos.captures_to_hand());
 
     if (pos.king_type() == WAZIR)
         score += make_score(0, mg_value(score) / 2);
@@ -1202,14 +1157,6 @@ namespace {
         }
     }
 
-    // nCheck
-    if (pos.check_counting())
-    {
-        int remainingChecks = pos.checks_remaining(Us);
-        assert(remainingChecks > 0);
-        score += make_score(3600, 1000) / (remainingChecks * remainingChecks);
-    }
-
     // Extinction
     if (pos.extinction_value() != VALUE_NONE)
     {
@@ -1479,7 +1426,7 @@ namespace {
         for (PieceType pt : pos.piece_types())
             score += hand<WHITE>(pt) - hand<BLACK>(pt);
 
-    score += (mobility[WHITE] - mobility[BLACK]) * (1 + pos.captures_to_hand() + pos.must_capture() + pos.check_counting());
+    score += (mobility[WHITE] - mobility[BLACK]) * (1 + pos.captures_to_hand() + pos.must_capture());
 
     // More complex interactions that require fully populated attack bitboards
     score +=  king<   WHITE>() - king<   BLACK>()

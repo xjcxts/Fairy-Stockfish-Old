@@ -92,17 +92,11 @@ inline std::string piece(const Position& pos, Move m, Notation n) {
     Piece pc = pos.moved_piece(m);
     PieceType pt = type_of(pc);
     // Quiet pawn moves
-    if ((n == NOTATION_SAN || n == NOTATION_LAN) && type_of(pc) == PAWN && type_of(m) != DROP)
+    if ((n == NOTATION_SAN || n == NOTATION_LAN) && type_of(pc) == PAWN)
         return "";
     // Tandem pawns
     else if (n == NOTATION_XIANGQI_WXF && popcount(pos.pieces(us, pt) & file_bb(from)) >= 3 - multi_tandem(pos.pieces(us, pt)))
         return std::to_string(popcount(forward_file_bb(us, from) & pos.pieces(us, pt)) + 1);
-    // Moves of promoted pieces
-    else if (is_shogi(n) && type_of(m) != DROP && pos.unpromoted_piece_on(from))
-        return "+" + std::string(1, toupper(pos.piece_to_char()[pos.unpromoted_piece_on(from)]));
-    // Promoted drops
-    else if (is_shogi(n) && type_of(m) == DROP && dropped_piece_type(m) != in_hand_piece_type(m))
-        return "+" + std::string(1, toupper(pos.piece_to_char()[in_hand_piece_type(m)]));
     else if (pos.piece_to_char_synonyms()[pc] != ' ')
         return std::string(1, toupper(pos.piece_to_char_synonyms()[pc]));
     else
@@ -161,9 +155,6 @@ inline std::string square(const Position& pos, Square s, Notation n) {
 }
 
 inline Disambiguation disambiguation_level(const Position& pos, Move m, Notation n) {
-    // Drops never need disambiguation
-    if (type_of(m) == DROP)
-        return NO_DISAMBIGUATION;
 
     // NOTATION_LAN and Janggi always use disambiguation
     if (n == NOTATION_LAN || n == NOTATION_JANGGI)
@@ -194,8 +185,6 @@ inline Disambiguation disambiguation_level(const Position& pos, Move m, Notation
     {
         if (pos.capture(m))
             return FILE_DISAMBIGUATION;
-        if (type_of(m) == PROMOTION && from != to && pos.sittuyin_promotion())
-            return SQUARE_DISAMBIGUATION;
     }
 
     // A disambiguation occurs if we have more then one piece of type 'pt'
@@ -248,18 +237,6 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     Square from = from_sq(m);
     Square to = to_sq(m);
 
-    if (type_of(m) == CASTLING)
-    {
-        san = to > from ? "O-O" : "O-O-O";
-
-        if (is_gating(m))
-        {
-            san += std::string("/") + (char)toupper(pos.piece_to_char()[make_piece(us, gating_type(m))]);
-            san += square(pos, gating_square(m), n);
-        }
-    }
-    else
-    {
         // Piece
         san += piece(pos, m, n);
 
@@ -267,10 +244,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
         Disambiguation d = disambiguation_level(pos, m, n);
         san += disambiguation(pos, from, n, d);
 
-        // Separator/Operator
-        if (type_of(m) == DROP)
-            san += n == NOTATION_SHOGI_HOSKING ? '\'' : is_shogi(n) ? '*' : '@';
-        else if (n == NOTATION_XIANGQI_WXF)
+        if (n == NOTATION_XIANGQI_WXF)
         {
             if (rank_of(from) == rank_of(to))
                 san += '=';
@@ -285,26 +259,13 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
             san += '-';
 
         // Destination square
-        if (n == NOTATION_XIANGQI_WXF && type_of(m) != DROP)
+        if (n == NOTATION_XIANGQI_WXF)
             san += file_of(to) == file_of(from) ? std::to_string(std::abs(rank_of(to) - rank_of(from))) : file(pos, to, n);
         else
             san += square(pos, to, n);
 
-        // Suffix
-        if (type_of(m) == PROMOTION)
-            san += std::string("=") + (char)toupper(pos.piece_to_char()[make_piece(us, promotion_type(m))]);
-        else if (type_of(m) == PIECE_PROMOTION)
-            san += is_shogi(n) ? std::string("+") : std::string("=") + (char)toupper(pos.piece_to_char()[make_piece(us, pos.promoted_piece_type(type_of(pos.moved_piece(m))))]);
-        else if (type_of(m) == PIECE_DEMOTION)
-            san += is_shogi(n) ? std::string("-") : std::string("=") + std::string(1, toupper(pos.piece_to_char()[pos.unpromoted_piece_on(from)]));
-        else if (type_of(m) == NORMAL && is_shogi(n) && pos.pseudo_legal(make<PIECE_PROMOTION>(from, to)))
-            san += std::string("=");
-        if (is_gating(m))
-            san += std::string("/") + (char)toupper(pos.piece_to_char()[make_piece(us, gating_type(m))]);
-    }
-
     // Check and checkmate
-    if (pos.gives_check(m) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
+    if (pos.gives_check(m) && n != NOTATION_XIANGQI_WXF)
     {
         StateInfo st;
         pos.do_move(m, st);
@@ -348,11 +309,11 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
     for (PieceType pt : { BISHOP, FERS, FERS_ALFIL, ALFIL, ELEPHANT })
         colorbound |= pos.pieces(pt) & ~restricted;
     unbound = pos.pieces() ^ restricted ^ colorbound;
-    if ((colorbound & pos.pieces(c)) && (((DarkSquares & colorbound) && (~DarkSquares & colorbound)) || unbound || pos.stalemate_value() != VALUE_DRAW || pos.check_counting() || pos.makpong()))
+    if ((colorbound & pos.pieces(c)) && (((DarkSquares & colorbound) && (~DarkSquares & colorbound)) || unbound || pos.stalemate_value() != VALUE_DRAW))
         return false;
 
     // Unbound pieces require one helper piece of either color
-    if ((pos.pieces(c) & unbound) && (popcount(pos.pieces() ^ restricted) >= 2 || pos.stalemate_value() != VALUE_DRAW || pos.check_counting() || pos.makpong()))
+    if ((pos.pieces(c) & unbound) && (popcount(pos.pieces() ^ restricted) >= 2 || pos.stalemate_value() != VALUE_DRAW))
         return false;
 
     return true;
