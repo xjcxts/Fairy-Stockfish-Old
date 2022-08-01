@@ -98,7 +98,7 @@ namespace {
 
   // History and stats update bonus, based on depth
   int stat_bonus(Depth d) {
-    return std::min((8 * d + 240) * d - 276 , 1907);
+    return std::min((9 * d + 270) * d - 311 , 2145);
   }
 
   // Add a small random component to draw evaluations to avoid 3-fold blindness
@@ -941,7 +941,7 @@ namespace {
     // Use qsearch if depth is equal or below zero (~4 Elo)
     if (    PvNode
         && !ttMove)
-        depth -= 4;
+        depth -= 3;
 
     if (depth <= 0)
         return qsearch<PV>(pos, ss, alpha, beta);
