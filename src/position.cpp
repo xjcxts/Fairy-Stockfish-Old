@@ -138,12 +138,6 @@ void Position::init() {
           for (Square s = SQ_A1; s <= SQ_MAX; ++s)
               Zobrist::psq[make_piece(c, pt)][s] = rng.rand<Key>();
 
-  for (File f = FILE_A; f <= FILE_MAX; ++f)
-      Zobrist::enpassant[f] = rng.rand<Key>();
-
-  for (int cr = NO_CASTLING; cr <= ANY_CASTLING; ++cr)
-      Zobrist::castling[cr] = rng.rand<Key>();
-
   Zobrist::side = rng.rand<Key>();
   Zobrist::noPawns = rng.rand<Key>();
 
@@ -271,14 +265,6 @@ Position& Position::set(const Variant* v, const string& fenStr, StateInfo* si, T
           if (ss.peek() == '~')
               ss >> token;
           put_piece(Piece(idx), sq, token == '~');
-          ++sq;
-      }
-
-      // Promoted shogi pieces
-      else if (token == '+' && (idx = piece_to_char().find(ss.peek())) != string::npos)
-      {
-          ss >> token;
-          put_piece(make_piece(color_of(Piece(idx)), promoted_piece_type(type_of(Piece(idx)))), sq, true, Piece(idx));
           ++sq;
       }
 
