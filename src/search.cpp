@@ -903,7 +903,7 @@ namespace {
     {
         assert(probCutBeta < VALUE_INFINITE);
 
-        MovePicker mp(pos, ttMove, probCutBeta - ss->staticEval, depth - 3, &captureHistory, prevSq);
+        MovePicker mp(pos, ttMove, probCutBeta - ss->staticEval, depth - 3, &captureHistory);
 
         while ((move = mp.next_move()) != MOVE_NONE)
             if (move != excludedMove && pos.legal(move))
@@ -978,8 +978,7 @@ moves_loop: // When in check, search starts from here
                                       &captureHistory,
                                       contHist,
                                       countermove,
-                                      ss->killers,
-                                      prevSq);
+                                      ss->killers);
 
     value = bestValue;
     moveCountPruning = false;
@@ -1351,7 +1350,7 @@ moves_loop: // When in check, search starts from here
                       && depth < 7
                       && beta  <  VALUE_KNOWN_WIN
                       && alpha > -VALUE_KNOWN_WIN)
-                     depth -= 1;
+                     depth /= 2;
 
                   assert(depth > 0);
               }
