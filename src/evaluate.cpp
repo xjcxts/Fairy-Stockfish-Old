@@ -505,7 +505,7 @@ namespace {
                                 PieceValue[EG][Pt] - PieceValue[EG][pos.unpromoted_piece_on(s)]) / 8;
 
         // Penalty if the piece is far from the kings in drop variants
-        if ((pos.captures_to_hand() || pos.two_boards()) && pos.count<KING>(Them) && pos.count<KING>(Us))
+        if ((pos.captures_to_hand()) && pos.count<KING>(Them) && pos.count<KING>(Us))
         {
             if (!(b & (kingRing[Us] | kingRing[Them])))
                 score -= KingProximity * distance(s, pos.square<KING>(Us)) * distance(s, pos.square<KING>(Them));
@@ -748,8 +748,7 @@ namespace {
                  +   3 * kingFlankAttack * kingFlankAttack / 8
                  +       mg_value(mobility[Them] - mobility[Us]) * int(!pos.captures_to_hand())
                  - 873 * !(pos.major_pieces(Them) || pos.captures_to_hand())
-                       * 2 / (2 + 2 * pos.two_boards() + 2 * pos.makpong()
-                                + (pos.king_type() != KING) * (pos.diagonal_lines() ? 1 : 2))
+                       * 2 / (2 + (pos.king_type() != KING) * (pos.diagonal_lines() ? 1 : 2))
                  - 100 * bool(attackedBy[Us][KNIGHT] & attackedBy[Us][KING])
                  -   6 * mg_value(score) / 8
                  -   4 * kingFlankDefense
@@ -770,7 +769,7 @@ namespace {
         score += make_score(0, mg_value(score) / 2);
 
     // For drop games, king danger is independent of game phase, but dependent on material density
-    if (pos.captures_to_hand() || pos.two_boards())
+    if (pos.captures_to_hand())
         score = make_score(mg_value(score) * me->material_density() / 11000,
                            mg_value(score) * me->material_density() / 11000);
 
@@ -1165,7 +1164,7 @@ namespace {
             {
                 // Single piece type extinction bonus
                 int denom = std::max(pos.count(Us, pt) - pos.extinction_piece_count(), 1);
-                if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count() || pos.two_boards())
+                if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count())
                     score += make_score(1000000 / (500 + PieceValue[MG][pt]),
                                         1000000 / (500 + PieceValue[EG][pt])) / (denom * denom)
                             * (pos.extinction_value() / VALUE_MATE);
