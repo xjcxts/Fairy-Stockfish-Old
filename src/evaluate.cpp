@@ -505,7 +505,7 @@ namespace {
                                 PieceValue[EG][Pt] - PieceValue[EG][pos.unpromoted_piece_on(s)]) / 8;
 
         // Penalty if the piece is far from the kings in drop variants
-        if ((pos.captures_to_hand()) && pos.count<KING>(Them) && pos.count<KING>(Us))
+        if ((pos.captures_to_hand() || pos.two_boards()) && pos.count<KING>(Them) && pos.count<KING>(Us))
         {
             if (!(b & (kingRing[Us] | kingRing[Them])))
                 score -= KingProximity * distance(s, pos.square<KING>(Us)) * distance(s, pos.square<KING>(Them));
@@ -748,7 +748,8 @@ namespace {
                  +   3 * kingFlankAttack * kingFlankAttack / 8
                  +       mg_value(mobility[Them] - mobility[Us]) * int(!pos.captures_to_hand())
                  - 873 * !(pos.major_pieces(Them) || pos.captures_to_hand())
-                       * 2 / (2 + (pos.king_type() != KING) * (pos.diagonal_lines() ? 1 : 2))
+                       * 2 / (2 + 2 * pos.two_boards() + 2 * pos.makpong()
+                                + (pos.king_type() != KING) * (pos.diagonal_lines() ? 1 : 2))
                  - 100 * bool(attackedBy[Us][KNIGHT] & attackedBy[Us][KING])
                  -   6 * mg_value(score) / 8
                  -   4 * kingFlankDefense
@@ -769,7 +770,7 @@ namespace {
         score += make_score(0, mg_value(score) / 2);
 
     // For drop games, king danger is independent of game phase, but dependent on material density
-    if (pos.captures_to_hand())
+    if (pos.captures_to_hand() || pos.two_boards())
         score = make_score(mg_value(score) * me->material_density() / 11000,
                            mg_value(score) * me->material_density() / 11000);
 
@@ -1164,7 +1165,7 @@ namespace {
             {
                 // Single piece type extinction bonus
                 int denom = std::max(pos.count(Us, pt) - pos.extinction_piece_count(), 1);
-                if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count())
+                if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count() || pos.two_boards())
                     score += make_score(1000000 / (500 + PieceValue[MG][pt]),
                                         1000000 / (500 + PieceValue[EG][pt])) / (denom * denom)
                             * (pos.extinction_value() / VALUE_MATE);
@@ -1467,10 +1468,44 @@ make_v:
 
 Value Eval::evaluate(const Position& pos, int* complexity) {
 
-  Value v = NNUE::evaluate(pos, complexity);
+  Value v;
+  Color stm = pos.side_to_move();
+  Value psq = pos.psq_eg_stm();
+  // Deciding between classical and NNUE eval (~10 Elo): for high PSQ imbalance we use classical,
+  // but we switch to NNUE during long shuffling or with high material on the board.
+  bool useClassical =    (pos.this_thread()->depth > 9 || pos.count<ALL_PIECES>() > 7)
+                      && abs(psq) * 5 > (856 + pos.non_pawn_material() / 64) * (10 + pos.rule50_count());
+
+  // Deciding between classical and NNUE eval (~10 Elo): for high PSQ imbalance we use classical,
+  // but we switch to NNUE during long shuffling or with high material on the board.
+  if (!Eval::useNNUE || useClassical)
+  {
+      v = Evaluation<NO_TRACE>(pos).value();
+      useClassical = abs(v) >= 297;
+  }
+
+  // If result of a classical evaluation is much lower than threshold fall back to NNUE
+  if (Eval::useNNUE && !useClassical)
+  {
+       int nnueComplexity;
+       int scale = 1037 + 53 * pos.non_pawn_material() / 4096;
+       Value optimism = pos.this_thread()->optimism[stm];
+
+       Value nnue = NNUE::evaluate(pos, &nnueComplexity);
+       // Blend nnue complexity with (semi)classical complexity
+       nnueComplexity = (110 * nnueComplexity + 148 * abs(nnue - psq)) / 256;
+       if (complexity) // Return hybrid NNUE complexity to caller
+           *complexity = nnueComplexity;
+
+       optimism = optimism * (239 + nnueComplexity) / 256;
+       v = (nnue * scale + optimism * (scale - 754)) / 1024;
+  }
 
   // Guarantee evaluation does not hit the tablebase range
   v = std::clamp(v, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
+
+  // When not using NNUE, return classical complexity to caller
+  if (complexity && (!useNNUE || useClassical)) *complexity = abs(v - psq);
 
   return v;
 }
