@@ -289,7 +289,7 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
   moveList = pos.checkers() ? generate<EVASIONS    >(pos, moveList)
                             : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
-      if (!pos.legal(*cur) || pos.virtual_drop(*cur))
+      if (!pos.legal(*cur))
           *cur = (--moveList)->move;
       else
           ++cur;

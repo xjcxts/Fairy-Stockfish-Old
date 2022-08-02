@@ -255,7 +255,6 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
-  bool virtual_drop(Move m) const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
   bool gives_check(Move m) const;
@@ -1191,11 +1190,6 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   // Castling is encoded as "king captures rook"
   return !empty(to_sq(m)) && from_sq(m) != to_sq(m);
-}
-
-inline bool Position::virtual_drop(Move m) const {
-  assert(is_ok(m));
-  return false;
 }
 
 inline Piece Position::captured_piece() const {

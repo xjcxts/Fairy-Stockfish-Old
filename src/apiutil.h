@@ -806,8 +806,6 @@ inline Validation check_digit_field(const std::string& field) {
 inline std::string get_valid_special_chars(const Variant* v) {
     std::string validSpecialCharactersFirstField = "/";
     // Whether or not '-', '+', '~', '[', ']' are valid depends on the variant being played.
-    if (v->shogiStylePromotions)
-        validSpecialCharactersFirstField += '+';
     if (!v->promotionPieceTypes.empty())
         validSpecialCharactersFirstField += '~';
     if (!v->freeDrops && (v->pieceDrops || v->seirawanGating || v->arrowGating))
