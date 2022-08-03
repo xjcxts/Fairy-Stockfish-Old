@@ -1292,7 +1292,6 @@ namespace {
 
     // Compute the initiative bonus for the attacking side
     complexity =       9 * pe->passed_count()
-                    + 12 * pos.count<PAWN>()
                     + 15 * pos.count<SOLDIER>()
                     +  9 * outflanking
                     + 21 * pawnsOnBothFlanks
@@ -1413,13 +1412,8 @@ namespace {
     // Pieces evaluated first (also populates attackedBy, attackedBy2).
     // For unused piece types, we still need to set attack bitboard to zero.
     for (PieceType pt : pos.piece_types())
-        if (pt != SHOGI_PAWN && pt != PAWN && pt != KING)
+        if (pt != KING)
             score += pieces<WHITE>(pt) - pieces<BLACK>(pt);
-
-    // Evaluate pieces in hand once attack tables are complete
-    if (pos.piece_drops() || pos.seirawan_gating())
-        for (PieceType pt : pos.piece_types())
-            score += hand<WHITE>(pt) - hand<BLACK>(pt);
 
     score += (mobility[WHITE] - mobility[BLACK]) * (1 + pos.captures_to_hand() + pos.must_capture());
 
@@ -1450,7 +1444,7 @@ make_v:
     v = (v / 16) * 16;
 
     // Side to move point of view
-    v = (pos.side_to_move() == WHITE ? v : -v) + 80 * pos.captures_to_hand();
+    v = (pos.side_to_move() == WHITE ? v : -v);
 
     return v;
   }
@@ -1476,7 +1470,7 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
   if (!Eval::useNNUE || useClassical)
   {
       v = Evaluation<NO_TRACE>(pos).value();
-      useClassical = abs(v) >= 297;
+      useClassical = abs(v) >= 267;
   }
 
   // If result of a classical evaluation is much lower than threshold fall back to NNUE
