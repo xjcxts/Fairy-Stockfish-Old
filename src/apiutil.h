@@ -74,7 +74,7 @@ enum Disambiguation {
 };
 
 inline bool is_shogi(Notation n) {
-    return n == NOTATION_SHOGI_HOSKING || n == NOTATION_SHOGI_HODGES || n == NOTATION_SHOGI_HODGES_NUMBER;
+    return false;
 }
 
 // is there more than one file with a pair of pieces?
@@ -106,12 +106,6 @@ inline std::string piece(const Position& pos, Move m, Notation n) {
 inline std::string file(const Position& pos, Square s, Notation n) {
     switch (n)
     {
-    case NOTATION_SHOGI_HOSKING:
-    case NOTATION_SHOGI_HODGES:
-    case NOTATION_SHOGI_HODGES_NUMBER:
-        return std::to_string(pos.max_file() - file_of(s) + 1);
-    case NOTATION_JANGGI:
-        return std::to_string(file_of(s) + 1);
     case NOTATION_XIANGQI_WXF:
         return std::to_string((pos.side_to_move() == WHITE ? pos.max_file() - file_of(s) : file_of(s)) + 1);
     default:
@@ -122,13 +116,6 @@ inline std::string file(const Position& pos, Square s, Notation n) {
 inline std::string rank(const Position& pos, Square s, Notation n) {
     switch (n)
     {
-    case NOTATION_SHOGI_HOSKING:
-    case NOTATION_SHOGI_HODGES_NUMBER:
-        return std::to_string(pos.max_rank() - rank_of(s) + 1);
-    case NOTATION_SHOGI_HODGES:
-        return std::string(1, char('a' + pos.max_rank() - rank_of(s)));
-    case NOTATION_JANGGI:
-        return std::to_string((pos.max_rank() - rank_of(s) + 1) % 10);
     case NOTATION_XIANGQI_WXF:
     {
         if (pos.empty(s))
@@ -145,13 +132,7 @@ inline std::string rank(const Position& pos, Square s, Notation n) {
 }
 
 inline std::string square(const Position& pos, Square s, Notation n) {
-    switch (n)
-    {
-    case NOTATION_JANGGI:
-        return rank(pos, s, n) + file(pos, s, n);
-    default:
-        return file(pos, s, n) + rank(pos, s, n);
-    }
+    return file(pos, s, n) + rank(pos, s, n);
 }
 
 inline Disambiguation disambiguation_level(const Position& pos, Move m, Notation n) {
@@ -178,13 +159,6 @@ inline Disambiguation disambiguation_level(const Position& pos, Move m, Notation
                 return RANK_DISAMBIGUATION;
         }
         return FILE_DISAMBIGUATION;
-    }
-
-    // Pawn captures always use disambiguation
-    if (n == NOTATION_SAN && pt == PAWN)
-    {
-        if (pos.capture(m))
-            return FILE_DISAMBIGUATION;
     }
 
     // A disambiguation occurs if we have more then one piece of type 'pt'
@@ -281,8 +255,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 inline bool has_insufficient_material(Color c, const Position& pos) {
 
     // Other win rules
-    if (   pos.captures_to_hand()
-        || pos.count_in_hand(c, ALL_PIECES)
+    if (   pos.count_in_hand(c, ALL_PIECES)
         || (pos.extinction_value() != VALUE_NONE && !pos.extinction_pseudo_royal())
         || (pos.capture_the_flag_piece() && pos.count(c, pos.capture_the_flag_piece())))
         return false;
@@ -926,19 +899,6 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
                     return FEN_INVALID_CASTLING_INFO;
             }
         }
-    }
-
-    // 4) Part
-    // check en-passant square
-    if (fenParts.size() >= 4 && !skipCastlingAndEp)
-    {
-        if (v->doubleStep && v->pieceTypes.find(PAWN) != v->pieceTypes.end())
-        {
-            if (check_en_passant_square(fenParts[3]) == NOK)
-                return FEN_INVALID_EN_PASSANT_SQ;
-        }
-        else if (v->countingRule && !check_digit_field(fenParts[3]))
-            return FEN_INVALID_COUNTING_RULE;
     }
 
     // 5) Part

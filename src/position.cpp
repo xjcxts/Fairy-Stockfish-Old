@@ -839,7 +839,7 @@ bool Position::legal(Move m) const {
 
   // Flying general rule
   // In case of bikjang passing is always allowed, even when in check
-  if ((var->flyingGeneral && count<KING>(us)) || st->bikjang)
+  if (count<KING>(us))
   {
       Square s = type_of(moved_piece(m)) == KING ? to : square<KING>(us);
       if (attacks_bb(~us, ROOK, s, occupied) & pieces(~us, KING) & ~square_bb(to))
@@ -1581,31 +1581,6 @@ bool Position::see_ge(Move m, Value threshold) const {
 
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
 
-  // n-move rule
-  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!checkers() || MoveList<LEGAL>(*this).size()))
-  {
-      int offset = 0;
-      if (var->chasingRule == AXF_CHASING && st->pliesFromNull >= 20)
-      {
-          int end = std::min(st->rule50, st->pliesFromNull);
-          StateInfo* stp = st;
-          int checkThem = bool(stp->checkersBB);
-          int checkUs = bool(stp->previous->checkersBB);
-          for (int i = 2; i < end; i += 2)
-          {
-              stp = stp->previous->previous;
-              checkThem += bool(stp->checkersBB);
-              checkUs += bool(stp->previous->checkersBB);
-          }
-          offset = 2 * std::max(std::max(checkThem, checkUs) - 10, 0) + 20 * CurrentProtocol == UCI_CYCLONE;
-      }
-      if (st->rule50 - offset > (2 * n_move_rule() - 1))
-      {
-          result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
-          return true;
-      }
-  }
-
   // n-fold repetition
   if (n_fold_rule())
   {
@@ -1763,12 +1738,9 @@ Bitboard Position::chased() const {
       return b;
 
   Bitboard pins = blockers_for_king(sideToMove);
-  if (var->flyingGeneral)
-  {
       Bitboard kingFilePieces = file_bb(file_of(square<KING>(~sideToMove))) & pieces(sideToMove);
       if ((kingFilePieces & pieces(sideToMove, KING)) && !more_than_one(kingFilePieces & ~pieces(KING)))
           pins |= kingFilePieces & ~pieces(KING);
-  }
   auto addChased = [&](Square attackerSq, PieceType attackerType, Bitboard attacks) {
       if (attacks & ~b)
       {
@@ -1800,7 +1772,7 @@ Bitboard Position::chased() const {
           {
               Square s = pop_lsb(attacks);
               Bitboard roots = attackers_to(s, pieces() ^ attackerSq, sideToMove) & ~pins;
-              if (!roots || (var->flyingGeneral && roots == pieces(sideToMove, KING) && (attacks_bb(sideToMove, ROOK, square<KING>(~sideToMove), pieces() ^ attackerSq) & s)))
+              if (!roots || (roots == pieces(sideToMove, KING) && (attacks_bb(sideToMove, ROOK, square<KING>(~sideToMove), pieces() ^ attackerSq) & s)))
                   b |= s;
           }
       }
